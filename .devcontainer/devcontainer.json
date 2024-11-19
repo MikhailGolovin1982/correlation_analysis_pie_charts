@@ -1,0 +1,13 @@
+{
+  "name": "Python Dev Container",
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",  // Используем Python 3.10
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [
+    "ms-python.python",
+    "ms-python.vscode-pylance"
+  ],
+  "postCreateCommand": "pip install matplotlib pandas",  // Установим библиотеки для работы с графиками и данными
+  "remoteUser": "vscode"
+}
