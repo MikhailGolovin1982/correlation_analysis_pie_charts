@@ -3,3 +3,5 @@ _pycache_/
 .vscode/
 .env
 .devcontainer/
+.venv
+PICTURES

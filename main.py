@@ -3,67 +3,115 @@ import numpy as np
 import networkx as nx
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 
-# Загрузка данных из Excel-файла
-file_path = 'Бельская.xlsx'
-sheet_name = 'Corr_matrix'
-data = pd.read_excel(file_path, sheet_name=sheet_name, index_col=0)
+# Папки проекта
+input_folder = 'XLSX'
+output_folder = 'PICTURES'
 
-# Очистка данных от NaN значений и создание симметричной матрицы
-data = data.fillna(0)
-data = data + data.T - pd.DataFrame(np.diag(np.diag(data.values)), index=data.index, columns=data.columns)
+# Настройки
+node_size = 5000  # Размер узлов на графе
 
-# Создание графа
-G = nx.Graph()
-threshold = 0.3
+correlation_method = 'pearson'  # Метод корреляции (Пирсон)
+# correlation_method = 'kendall'  # Метод корреляции (Кендалла)
+# correlation_method = 'spearman'  # Метод корреляции (Спирмена)
 
-# Добавление узлов и рёбер в граф на основе значений корреляции
-for i in range(len(data.columns)):
-    for j in range(i + 1, len(data.columns)):
-        corr_value = data.iloc[i, j]
-        if abs(corr_value) >= threshold:
-            G.add_edge(data.columns[i], data.columns[j], weight=corr_value)
+# Создаем папку для сохранения результатов, если её нет
+os.makedirs(output_folder, exist_ok=True)
 
-# Разделение всех названий на две строки для улучшения читаемости
-#labels = {node: '\n'.join(node.split(', ', 1)) if ', ' in node else node for node in G.nodes()}
-labels = {node: node for node in G.nodes()}
+# Обработка каждого Excel-файла
+for file_name in os.listdir(input_folder):
+    if file_name.endswith('.xlsx'):
+        file_path = os.path.join(input_folder, file_name)
+        file_base_name = os.path.splitext(file_name)[0]
 
-# Настройка цвета: зеленый для положительных, красный для отрицательных
-cmap = sns.diverging_palette(10, 150, as_cmap=True)  # Палитра для матрицы
-edge_colors = ['darkgreen' if G[u][v]['weight'] > 0 else 'darkred' for u, v in G.edges()]
-widths = [abs(G[u][v]['weight']) * 6 for u, v in G.edges()]
-alphas = [abs(G[u][v]['weight']) for u, v in G.edges()]  # Прозрачность линий в зависимости от корреляции
+        # --- Работа с листом Corr_matrix ---
+        sheet_corr = 'Corr_matrix'
+        try:
+            corr_matrix_excel = pd.read_excel(file_path, sheet_name=sheet_corr, index_col=0)
+            corr_matrix_excel = corr_matrix_excel.fillna(0)
 
-# --- Визуализация корреляционного графа ---
-plt.figure(figsize=(24, 24))
-pos = nx.circular_layout(G)
-nx.draw_networkx_nodes(G, pos, node_size=8000, node_color='skyblue')
-for (u, v, d), color, width, alpha in zip(G.edges(data=True), edge_colors, widths, alphas):
-    nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], width=width, edge_color=color, alpha=alpha)
+            # Восстанавливаем полную матрицу
+            corr_matrix_full = corr_matrix_excel + corr_matrix_excel.T - np.diag(np.diag(corr_matrix_excel))
 
-# Расчет позиций для подписей с использованием полярных координат
-label_pos = {}
-radius = 1.
-for i, node in enumerate(G.nodes()):
-    angle = 2 * np.pi * i / len(G.nodes())
-    x = radius * np.cos(angle)
-    y = radius * np.sin(angle)
-    label_pos[node] = (x, y)
-nx.draw_networkx_labels(G, label_pos, labels=labels, font_size=12, font_family="sans-serif", font_weight="bold")
+            # Построение графа по полной матрице
+            G_excel = nx.Graph()
+            for i in range(len(corr_matrix_full.columns)):
+                for j in range(i + 1, len(corr_matrix_full.columns)):
+                    weight = corr_matrix_full.iloc[i, j]
+                    if abs(weight) > 0:
+                        G_excel.add_edge(corr_matrix_full.columns[i], corr_matrix_full.columns[j], weight=weight)
 
-# Настройка заголовка и сохранение графа
-plt.title("Корреляционная сеть", fontsize=18, y=0.87)
-plt.margins(x=0.2, y=0.2)
-plt.axis('off')
-plt.savefig("correlation_network_graph.png", dpi=300, bbox_inches='tight', pad_inches=0.5)
-plt.close()
+            # Генерация единого layout
+            pos = nx.circular_layout(G_excel)
 
-# --- Визуализация половинной корреляционной матрицы ---
-# Создание маски для верхней половины матрицы
-mask = np.triu(np.ones_like(data, dtype=bool))
+            # Визуализация графа по Excel
+            edge_colors = ['darkgreen' if G_excel[u][v]['weight'] > 0 else 'darkred' for u, v in G_excel.edges()]
+            widths = [abs(G_excel[u][v]['weight']) * 6 for u, v in G_excel.edges()]
+            alphas = [min(max(abs(G_excel[u][v]['weight']), 0), 1) for u, v in G_excel.edges()]
 
-plt.figure(figsize=(12, 10))
-sns.heatmap(data, annot=True, mask=mask, cmap=cmap, center=0, linewidths=0.5, fmt=".1f", cbar_kws={"shrink": .8})
-plt.title("Корреляционная матрица")
-plt.savefig("correlation_matrix_colored.png", dpi=300, bbox_inches='tight', pad_inches=0.5)
-plt.close()
+            plt.figure(figsize=(12, 12))
+            nx.draw_networkx_nodes(G_excel, pos, node_size=node_size, node_color='skyblue')
+            nx.draw_networkx_edges(G_excel, pos, edge_color=edge_colors, width=widths, alpha=alphas)
+            nx.draw_networkx_labels(G_excel, pos, font_size=14, font_weight='bold')
+            plt.title(f"Корреляционная сеть (Excel) сорта {file_base_name}", fontsize=16, fontweight='bold')
+            plt.savefig(os.path.join(output_folder, f"{file_base_name}_corr_network_excel.png"), dpi=300)
+            plt.close()
+
+            # Визуализация сокращённой матрицы
+            mask = np.triu(np.ones_like(corr_matrix_excel, dtype=bool))  # Скрываем верхнюю часть
+            plt.figure(figsize=(12, 10))
+            sns.heatmap(
+                corr_matrix_excel, annot=True, mask=mask, cmap='RdYlGn', center=0, fmt=".1f",
+                cbar_kws={'label': 'Корреляция'}
+            )
+            plt.title(f"Корреляционная матрица (Excel) сорта {file_base_name}", fontsize=16, fontweight='bold')
+            plt.savefig(os.path.join(output_folder, f"{file_base_name}_corr_matrix_excel.png"), dpi=300)
+            plt.close()
+        except Exception as e:
+            print(f"Ошибка при обработке листа Corr_matrix в файле {file_name}: {e}")
+
+        # --- Работа с листом Data ---
+        sheet_data = 'Data'
+        try:
+            # Считывание данных
+            data = pd.read_excel(file_path, sheet_name=sheet_data, header=1)
+            param_numbers = data.columns.tolist()
+
+            # Расчёт корреляционной матрицы
+            corr_matrix_data = data.corr(method=correlation_method)
+
+            # Построение графа по данным
+            G_data = nx.Graph()
+            for i in range(len(corr_matrix_data.columns)):
+                for j in range(i + 1, len(corr_matrix_data.columns)):
+                    weight = corr_matrix_data.iloc[i, j]
+                    if abs(weight) > 0.3:
+                        G_data.add_edge(param_numbers[i], param_numbers[j], weight=weight)
+
+            # Визуализация графа по данным
+            edge_colors = ['darkgreen' if G_data[u][v]['weight'] > 0 else 'darkred' for u, v in G_data.edges()]
+            widths = [abs(G_data[u][v]['weight']) * 6 for u, v in G_data.edges()]
+            alphas = [min(max(abs(G_data[u][v]['weight']), 0), 1) for u, v in G_data.edges()]
+
+            plt.figure(figsize=(12, 12))
+            nx.draw_networkx_nodes(G_data, pos, node_size=node_size, node_color='skyblue')
+            nx.draw_networkx_edges(G_data, pos, edge_color=edge_colors, width=widths, alpha=alphas)
+            nx.draw_networkx_labels(G_data, pos, labels=dict(zip(param_numbers, param_numbers)), font_size=14, font_weight='bold')
+            plt.title(f"Корреляционная сеть (метод Пирсона) сорта {file_base_name}", fontsize=16, fontweight='bold')
+            plt.savefig(os.path.join(output_folder, f"{file_base_name}_corr_network_data.png"), dpi=300)
+            plt.close()
+
+            # Визуализация сокращённой матрицы по данным
+            mask = np.triu(np.ones_like(corr_matrix_data, dtype=bool))  # Скрываем верхнюю часть
+            plt.figure(figsize=(12, 10))
+            sns.heatmap(
+                corr_matrix_data, annot=True, mask=mask, cmap='RdYlGn', center=0, fmt=".1f",
+                cbar_kws={'label': 'Корреляция'}
+            )
+            plt.title(f"Корреляционная матрица (метод Пирсона) сорта {file_base_name}", fontsize=16, fontweight='bold')
+            plt.savefig(os.path.join(output_folder, f"{file_base_name}_corr_matrix_data.png"), dpi=300)
+            plt.close()
+        except Exception as e:
+            print(f"Ошибка при обработке листа Data в файле {file_name}: {e}")
+            
