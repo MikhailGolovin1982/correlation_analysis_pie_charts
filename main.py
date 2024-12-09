@@ -76,10 +76,10 @@ def rearrange_columns(file_path, sheet_name='Data'):
 
 
 # Перебираем файлы в папке XLSX и применяем изменения
-# for file_name in os.listdir(input_folder):
-#    if file_name.endswith('.xlsx'):
-#        file_path = os.path.join(input_folder, file_name)
-#        rearrange_columns(file_path)
+for file_name in os.listdir(input_folder):
+    if file_name.endswith('.xlsx'):
+        file_path = os.path.join(input_folder, file_name)
+        rearrange_columns(file_path)
 
 # --- Основной функционал проекта ---
 for file_name in os.listdir(input_folder):
